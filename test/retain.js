@@ -194,6 +194,43 @@ test('reconnected subscriber will not receive retained messages when QoS 0 and c
   })
 })
 
+test('subscriber will not receive retained messages when QoS is 128', function (t) {
+  t.plan(3)
+
+  const broker = aedes()
+  t.teardown(broker.close.bind(broker))
+
+  const pubPacket = {
+    cmd: 'publish',
+    topic: 'hello',
+    payload: 'world',
+    qos: 1,
+    retain: true,
+    messageId: 42
+  }
+
+  broker.authorizeSubscribe = function (client, sub, callback) {
+    if (sub.topic === pubPacket.topic) {
+      callback(null, null)
+    } else {
+      callback(null, sub)
+    }
+  }
+
+  const publisher = connect(setup(broker), { clean: true })
+
+  publisher.inStream.write(pubPacket)
+
+  publisher.outStream.on('data', function (packet) {
+    const subscriber = connect(setup(broker), { clean: true })
+    subscribe(t, subscriber, pubPacket.topic, 128, function () {
+      subscriber.outStream.on('data', function (packet) {
+        t.fail('should not received retain message')
+      })
+    })
+  })
+})
+
 // [MQTT-3.3.1-6]
 test('new QoS 0 subscribers receive QoS 0 retained messages when clean', function (t) {
   t.plan(9)
@@ -238,7 +275,7 @@ test('new QoS 0 subscribers receive QoS 0 retained messages when clean', functio
   })
 
   clock.setTimeout(() => {
-    t.equal(broker.counter, 8)
+    t.equal(broker.counter, 9)
   }, 200)
 })
 
@@ -278,7 +315,7 @@ test('new QoS 0 subscribers receive downgraded QoS 1 retained messages when clea
     })
   })
   broker.on('closed', function () {
-    t.equal(broker.counter, 7)
+    t.equal(broker.counter, 8)
   })
 })
 
